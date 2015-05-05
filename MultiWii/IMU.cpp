@@ -294,7 +294,8 @@ uint8_t getEstimatedAltitude(){
     //I
     errorAltitudeI += conf.pid[PIDALT].I8 * error16 >>6;
     errorAltitudeI = constrain(errorAltitudeI,-30000,30000);
-    BaroPID += errorAltitudeI>>9; //I in range +/-60
+    // BaroPID += errorAltitudeI>>9; //I in range +/-60
+    BaroPID += errorAltitudeI>>7; //I in range +/-234
  
     // projection of ACC vector to global Z, with 1G subtructed
     // Math: accZ = A * G / |G| - 1G
@@ -311,6 +312,13 @@ uint8_t getEstimatedAltitude(){
     static int32_t lastBaroAlt;
     //int16_t baroVel = (alt.EstAlt - lastBaroAlt) * 1000000.0f / dTime;
     int16_t baroVel = (alt.EstAlt - lastBaroAlt) * (1000000 / UPDATE_INTERVAL);
+          
+    if (calibratingG || calibratingA)     // Skypup 2015.05.05
+    {
+      baroVel = 0;
+      vel = 0;
+    }
+
     lastBaroAlt = alt.EstAlt;
 
     baroVel = constrain(baroVel, -300, 300); // constrain baro velocity +/- 300cm/s

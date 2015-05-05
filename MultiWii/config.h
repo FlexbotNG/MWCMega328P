@@ -36,7 +36,7 @@
     //#define BI
     //#define TRI
     //#define QUADP
-    //#define QUADX
+    #define QUADX    // 电机旋转方向为 skypup 方式, 与通常的相反. Skypup 2015.05.05
     //#define Y4
     //#define Y6
     //#define HEX6
@@ -64,7 +64,7 @@
 
   /****************************    Motor maxthrottle    *******************************/
     /* this is the maximum value for the ESCs at full power, this value can be increased up to 2000 */
-    #define MAXTHROTTLE 1850
+    #define MAXTHROTTLE 2000
 
   /****************************    Mincommand          *******************************/
     /* this is the value for the ESCs when they are not armed
@@ -129,6 +129,8 @@
       //#define GY_80           // Chinese 10 DOF with  L3G4200D ADXL345 HMC5883L BMP085, LLC
       //#define GY_85           // Chinese 9 DOF with  ITG3205 ADXL345 HMC5883L LLC
       //#define GY_86           // Chinese 10 DOF with  MPU6050 HMC5883L MS5611, LLC
+      #define GY_87           // Chinese 10 DOF with MPU6050 HMC5883L BMP180, LLC
+      //#define GY_88           // Chinese 10 DOF with MPU6050 HMC5883L BMP085, LLC
       //#define GY_521          // Chinese 6  DOF with  MPU6050, LLC
       //#define INNOVWORKS_10DOF // with ITG3200, BMA180, HMC5883, BMP085 available here http://www.diymulticopter.com
       //#define INNOVWORKS_6DOF // with ITG3200, BMA180 available here http://www.diymulticopter.com
@@ -331,7 +333,7 @@
       /* The following lines apply only for specific receiver with only one PPM sum signal, on digital PIN 2
          Select the right line depending on your radio brand. Feel free to modify the order in your PPM order is different */
       //#define SERIAL_SUM_PPM         PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
-      //#define SERIAL_SUM_PPM         ROLL,PITCH,THROTTLE,YAW,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Robe/Hitec/Futaba
+      //#define SERIAL_SUM_PPM         ROLL,PITCH,THROTTLE,YAW,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Robe/Hitec/Futaba/飞梦
       //#define SERIAL_SUM_PPM         ROLL,PITCH,YAW,THROTTLE,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Multiplex
       //#define SERIAL_SUM_PPM         PITCH,ROLL,THROTTLE,YAW,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For some Hitec/Sanwa/Others
 
@@ -461,7 +463,7 @@
 
   /******                Serial com speed    *********************************/
     /* This is the speed of the serial interfaces */
-    #define SERIAL0_COM_SPEED 115200
+    #define SERIAL0_COM_SPEED 38400
     #define SERIAL1_COM_SPEED 115200
     #define SERIAL2_COM_SPEED 115200
     #define SERIAL3_COM_SPEED 115200
@@ -502,7 +504,7 @@
       //#define MPU6050_LPF_188HZ
       //#define MPU6050_LPF_98HZ
       //#define MPU6050_LPF_42HZ
-      //#define MPU6050_LPF_20HZ
+      #define MPU6050_LPF_20HZ
       //#define MPU6050_LPF_10HZ
       //#define MPU6050_LPF_5HZ       // Use this only in extreme cases, rather change motors and/or props
 
@@ -533,7 +535,7 @@
   /* Automatically increase throttle based on the angle of the copter
      Original idea by Kraut Rob, first implementation HAdrian							*/
 
-  //#define THROTTLE_ANGLE_CORRECTION 40
+  #define THROTTLE_ANGLE_CORRECTION 40
   
  /*************************        Advanced Headfree Mode             ********************/
  /* In Advanced Headfree mode when the copter is farther than ADV_HEADFREE_RANGE meters then 
@@ -622,7 +624,7 @@
 
     /* introduce a deadband around the stick center
        Must be greater than zero, comment if you dont want a deadband on roll, pitch and yaw */
-    //#define DEADBAND 6
+    #define DEADBAND 15
 
   /**************************************************************************************/
   /***********************                  GPS                **************************/
@@ -840,8 +842,8 @@
 
     /* defines the neutral zone of throttle stick during altitude hold, default setting is
        +/-50 uncommend and change the value below if you want to change it. */
-    #define ALT_HOLD_THROTTLE_NEUTRAL_ZONE    50
-    //#define ALT_HOLD_THROTTLE_MIDPOINT        1500  // in us    - if uncommented, this value is used in ALT_HOLD for throttle stick middle point instead of initialThrottleHold parameter.
+    #define ALT_HOLD_THROTTLE_NEUTRAL_ZONE    15
+    #define ALT_HOLD_THROTTLE_MIDPOINT        1500  // in us    - if uncommented, this value is used in ALT_HOLD for throttle stick middle point instead of initialThrottleHold parameter.
 
 
     /* uncomment to disable the altitude hold feature.

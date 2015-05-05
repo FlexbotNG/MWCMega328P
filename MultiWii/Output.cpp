@@ -368,28 +368,44 @@ void writeMotors() { // [1000;2000] => [125;250]
   #if defined(PROMINI)
     #if (NUMBER_MOTOR > 0)
       #ifndef EXT_MOTOR_RANGE 
-        OCR1A = motor[0]>>3; //  pin 9
+        #if defined(QUADX)
+          OCR1A = motor[3]>>3;             // X4机型管脚调整。skypup 2015.05.05
+        #else
+          OCR1A = motor[0]>>3;             //  pin 9
+        #endif
       #else
         OCR1A = ((motor[0]>>2) - 250);
       #endif
     #endif
     #if (NUMBER_MOTOR > 1)
       #ifndef EXT_MOTOR_RANGE 
-        OCR1B = motor[1]>>3; //  pin 10
+        #if defined(QUADX)
+          OCR1B = motor[2]>>3;             // X4机型管脚调整。skypup 2015.05.05
+        #else
+          OCR1B = motor[1]>>3;             //  pin 10
+        #endif   
       #else
         OCR1B = ((motor[1]>>2) - 250);
       #endif
     #endif
     #if (NUMBER_MOTOR > 2)
       #ifndef EXT_MOTOR_RANGE
-        OCR2A = motor[2]>>3; //  pin 11
+        #if defined(QUADX)
+          OCR2A = motor[0]>>3;             // X4机型管脚调整。skypup 2015.05.05
+        #else
+          OCR2A = motor[2]>>3;             //  pin 11        
+        #endif  
       #else
         OCR2A = ((motor[2]>>2) - 250);
       #endif
     #endif
     #if (NUMBER_MOTOR > 3)
       #ifndef EXT_MOTOR_RANGE
-        OCR2B = motor[3]>>3; //  pin 3
+        #if defined(QUADX)
+          OCR2B = motor[7]>>3;             // X4机型管脚调整。skypup 2015.05.05 
+        #else
+          OCR2B = motor[3]>>3;             //  pin 3    
+        #endif  
       #else
         OCR2B = ((motor[3]>>2) - 250);
       #endif
@@ -415,7 +431,11 @@ void writeMotors() { // [1000;2000] => [125;250]
     #if (NUMBER_MOTOR > 6) //note: EXT_MOTOR_RANGE not possible here
       atomicPWM_PINA2_highState = ((motor[6]-1000)>>2)+5;
       atomicPWM_PINA2_lowState  = 245-atomicPWM_PINA2_highState;
-      atomicPWM_PIN12_highState = ((motor[7]-1000)>>2)+5;
+      #if defined(QUADX)
+        atomicPWM_PIN12_highState = ((motor[1]-1000)>>2)+5;          // X4机型管脚调整。skypup 2015.05.05
+      #else
+        atomicPWM_PIN12_highState = ((motor[7]-1000)>>2)+5;  
+      #endif  
       atomicPWM_PIN12_lowState  = 245-atomicPWM_PIN12_highState;
     #endif
   #endif
@@ -1036,10 +1056,19 @@ void mixTable() {
     motor[2] = PIDMIX(+1, 0,+1); //LEFT
     motor[3] = PIDMIX( 0,-1,-1); //FRONT
   #elif defined( QUADX )
-    motor[0] = PIDMIX(-1,+1,-1); //REAR_R
-    motor[1] = PIDMIX(-1,-1,+1); //FRONT_R
-    motor[2] = PIDMIX(+1,+1,+1); //REAR_L
-    motor[3] = PIDMIX(+1,-1,-1); //FRONT_L
+//    motor[0] = PIDMIX(-1,+1,-1); //REAR_R
+//    motor[1] = PIDMIX(-1,-1,+1); //FRONT_R
+//    motor[2] = PIDMIX(+1,+1,+1); //REAR_L
+//    motor[3] = PIDMIX(+1,-1,-1); //FRONT_L
+    // Skypup version
+    motor[0] = PIDMIX(-1,+1,+1); //REAR_R
+    motor[1] = PIDMIX(-1,-1,-1); //FRONT_R
+    motor[2] = PIDMIX(+1,+1,-1); //REAR_L
+    motor[3] = PIDMIX(+1,-1,+1); //FRONT_L
+    motor[4] = MIDRC;            // 1500
+    motor[5] = MIDRC;            // 1500
+    motor[6] = MIDRC;            // 1500
+    motor[7] = MIDRC;            // 1500
   #elif defined( Y4 )
     motor[0] = PIDMIX(+0,+1,-1);   //REAR_1 CW
     motor[1] = PIDMIX(-1,-1, 0); //FRONT_R CCW
@@ -1425,12 +1454,23 @@ void mixTable() {
       if (maxMotor > MAXTHROTTLE) // this is a way to still have good gyro corrections if at least one motor reaches its max.
         motor[i] -= maxMotor - MAXTHROTTLE;
       motor[i] = constrain(motor[i], conf.minthrottle, MAXTHROTTLE);
-      if ((rcData[THROTTLE] < MINCHECK) && !f.BARO_MODE)
-      #ifndef MOTOR_STOP
-        motor[i] = conf.minthrottle;
-      #else
-        motor[i] = MINCOMMAND;
-      #endif
+      
+      if (rcData[THROTTLE] < MINCHECK)
+      {
+        if (f.BARO_MODE)    // 尝试解决着陆弹跳现象。Skypup 2015.05.05
+        { 
+          motor[i] = constrain(motor[i], conf.minthrottle, min(MAXTHROTTLE, rcCommand[THROTTLE] + 200));
+        }
+        else
+        {
+          #ifndef MOTOR_STOP
+            motor[i] = conf.minthrottle;
+          #else
+            motor[i] = MINCOMMAND;
+          #endif
+        }
+      }
+
       if (!f.ARMED)
         motor[i] = MINCOMMAND;
     }

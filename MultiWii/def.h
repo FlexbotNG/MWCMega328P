@@ -211,7 +211,8 @@
   #define PRI_SERVO_FROM   TRI_SERVO // use only servo 6 (or 4 with Mega HW PWM)
   #define PRI_SERVO_TO     TRI_SERVO
 #elif defined(QUADP) || defined(QUADX) || defined(Y4)|| defined(VTAIL4)
-  #define NUMBER_MOTOR     4
+  // #define NUMBER_MOTOR     4
+  #define NUMBER_MOTOR     8  // 调整管脚次序 Skypup 2015.05.05
 #elif defined(Y6) || defined(HEX6) || defined(HEX6X) || defined(HEX6H)
   #define NUMBER_MOTOR     6
 #elif defined(OCTOX8) || defined(OCTOFLATP) || defined(OCTOFLATX)
@@ -304,10 +305,10 @@
   #define PPM_PIN_INTERRUPT          attachInterrupt(0, rxInt, RISING); //PIN 0
   #define SPEK_SERIAL_PORT           0
   //RX PIN assignment inside the port //for PORTD
-  #define THROTTLEPIN                2
-  #define ROLLPIN                    4
-  #define PITCHPIN                   5
-  #define YAWPIN                     6
+  #define THROTTLEPIN                5    // 接收器通道次序改为与 Futaba 一致。 Skypup 2015.05.05
+  #define ROLLPIN                    2    // 接收器通道次序改为与 Futaba 一致。 Skypup 2015.05.05
+  #define PITCHPIN                   4    // 接收器通道次序改为与 Futaba 一致。 Skypup 2015.05.05
+  #define YAWPIN                     6    // 接收器通道次序改为与 Futaba 一致。 Skypup 2015.05.05
   #define AUX1PIN                    7
   #define AUX2PIN                    0 // optional PIN 8 or PIN 12
   #define AUX3PIN                    1 // unused 
@@ -1260,6 +1261,28 @@
   #define ACC_ORIENTATION(X, Y, Z)  {imu.accADC[ROLL]  = -X; imu.accADC[PITCH]  = -Y; imu.accADC[YAW]  =  Z;}
   #define GYRO_ORIENTATION(X, Y, Z) {imu.gyroADC[ROLL] =  Y; imu.gyroADC[PITCH] = -X; imu.gyroADC[YAW] = -Z;}
   #define MAG_ORIENTATION(X, Y, Z)  {imu.magADC[ROLL]  =  X; imu.magADC[PITCH]  =  Y; imu.magADC[YAW]  = -Z;}
+  #define MPU6050_I2C_AUX_MASTER // MAG connected to the AUX I2C bus of MPU6050
+  #undef INTERNAL_I2C_PULLUPS
+#endif
+
+#if defined(GY_87)
+  #define MPU6050
+  #define HMC5883
+  #define BMP085
+  #define ACC_ORIENTATION(X, Y, Z) {imu.accADC[ROLL] = -X; imu.accADC[PITCH] = -Y; imu.accADC[YAW] = Z;}
+  #define GYRO_ORIENTATION(X, Y, Z) {imu.gyroADC[ROLL] = Y; imu.gyroADC[PITCH] = -X; imu.gyroADC[YAW] = -Z;}
+  #define MAG_ORIENTATION(X, Y, Z) {imu.magADC[ROLL] = X; imu.magADC[PITCH] = Y; imu.magADC[YAW] = -Z;}
+  #define MPU6050_I2C_AUX_MASTER // MAG connected to the AUX I2C bus of MPU6050
+  #undef INTERNAL_I2C_PULLUPS
+#endif
+
+#if defined(GY_88)
+  #define MPU6050
+  #define HMC5883
+  #define BMP085
+  #define ACC_ORIENTATION(X, Y, Z) {imu.accADC[ROLL] = -X; imu.accADC[PITCH] = -Y; imu.accADC[YAW] = Z;}
+  #define GYRO_ORIENTATION(X, Y, Z) {imu.gyroADC[ROLL] = Y; imu.gyroADC[PITCH] = -X; imu.gyroADC[YAW] = -Z;}
+  #define MAG_ORIENTATION(X, Y, Z) {imu.magADC[ROLL] = X; imu.magADC[PITCH] = Y; imu.magADC[YAW] = -Z;}
   #define MPU6050_I2C_AUX_MASTER // MAG connected to the AUX I2C bus of MPU6050
   #undef INTERNAL_I2C_PULLUPS
 #endif

@@ -160,6 +160,14 @@ int16_t  sonarAlt;
 int16_t  BaroPID = 0;
 int16_t  errorAltitudeI = 0;
 
+uint8_t lArmStickLock = 0;  // 解锁后只有油门最低、其它摇杆回中后才响应操作。0 - 正常, 1 - 锁定.
+uint32_t nav_timer_stop = 0;            /// common timer used in navigation (contains the desired stop time in millis()
+
+static int16_t initialThrottleHold;
+#ifdef ALT_HOLD_THROTTLE_MIDPOINT
+  static int8_t lLockBaroTakeoff = 0;
+#endif
+
 // **************
 // gyro+acc IMU
 // **************
@@ -349,6 +357,13 @@ void annexCode() { // this code is excetuted at each loop and won't interfere wi
       else { tmp=0; }
     #endif
     if(axis!=2) { //ROLL & PITCH
+      #ifdef QUADX
+        if (f.ANGLE_MODE)
+        {
+          // QUADX机型在Angle模式下，D/R小舵设置为：副翼 60%，升降 60%。Skypup 2015.05.05
+          tmp = tmp * 6 / 10;
+        }
+      #endif
       tmp2 = tmp>>7; // 500/128 = 3.9  => range [0;3]
       rcCommand[axis] = lookupPitchRollRC[tmp2] + ((tmp-(tmp2<<7)) * (lookupPitchRollRC[tmp2+1]-lookupPitchRollRC[tmp2])>>7);
       prop1 = 128-((uint16_t)conf.rollPitchRate*tmp>>9); // prop1 was 100, is 128 now -- and /512 instead of /500
@@ -356,6 +371,13 @@ void annexCode() { // this code is excetuted at each loop and won't interfere wi
       dynP8[axis] = (uint16_t)conf.pid[axis].P8*prop1>>7; // was /100, is /128 now
       dynD8[axis] = (uint16_t)conf.pid[axis].D8*prop1>>7; // was /100, is /128 now
     } else {      // YAW
+      #ifdef QUADX
+        if (f.ANGLE_MODE)
+        {
+          // QUADX机型在Angle模式下，D/R小舵设置为：方向 70%。Skypup 2015.05.05
+          tmp = tmp * 7 / 10;
+        }
+      #endif
       rcCommand[axis] = tmp;
     }
     if (rcData[axis]<MIDRC) rcCommand[axis] = -rcCommand[axis];
@@ -700,13 +722,48 @@ void go_arm() {
     && failsafeCnt < 2
   #endif
     ) {
+  #ifdef ALT_HOLD_THROTTLE_MIDPOINT
+    if(!f.ARMED) { // arm now!
+  #else   
     if(!f.ARMED && !f.BARO_MODE) { // arm now!
+  #endif
       f.ARMED = 1;
+      #if BARO
+        calibratingB = 10; // calibrate baro to new ground level (10 * 25 ms = ~250 ms non blocking)
+      #endif
+      #if defined(QUADX) || defined(AIRPLANE)
+        // 解锁后校准 Skypup 2015.05.05
+        calibratingA = 512;
+        calibratingG = 512;
+        
+        #ifdef ALT_HOLD_THROTTLE_MIDPOINT
+          lArmStickLock = 1;
+          lLockBaroTakeoff = 1;
+        #endif
+      #endif
       headFreeModeHold = att.heading;
       magHold = att.heading;
       #if defined(VBAT)
         if (analog.vbat > NO_VBAT) vbatMin = analog.vbat;
       #endif
+      
+      // Skypup 2015.05.05
+      if (f.BARO_MODE)
+      {
+        errorAltitudeI = 0;
+        
+        AltHold = alt.EstAlt - 200;
+
+        #if defined(ALT_HOLD_THROTTLE_MIDPOINT)
+          initialThrottleHold = ALT_HOLD_THROTTLE_MIDPOINT;
+        #else
+          initialThrottleHold = rcCommand[THROTTLE];
+        #endif
+        BaroPID=0;
+        
+        nav_timer_stop = millis() + 5000;
+      }
+
       #ifdef LCD_TELEMETRY // reset some values when arming
         #if BARO
           BAROaltMax = alt.EstAlt;
@@ -767,7 +824,7 @@ void loop () {
   int16_t AngleRateTmp, RateError;
 #endif
   static uint32_t rcTime  = 0;
-  static int16_t initialThrottleHold;
+  // static int16_t initialThrottleHold;
   static uint32_t timestamp_fixated = 0;
   int16_t rc;
   int32_t prop = 0;
@@ -815,6 +872,35 @@ void loop () {
     } else rcDelayCommand = 0;
     rcSticks = stTmp;
     
+    // 解锁后只有油门最低或回中、其它摇杆回中后才响应操作
+    if (lArmStickLock)
+    {
+      if (f.ARMED && (rcSticks != THR_LO + YAW_CE + PIT_CE + ROL_CE) && (rcSticks != THR_CE + YAW_CE + PIT_CE + ROL_CE))
+      {
+        rcData[ROLL] = 1500;
+        rcData[PITCH] = 1500;
+        rcData[THROTTLE] = 1000;
+        rcData[YAW] = 1500;
+      }
+      else
+      {
+        lArmStickLock = 0;
+      }
+    }
+    #ifdef ALT_HOLD_THROTTLE_MIDPOINT
+    else if (lLockBaroTakeoff)
+    {
+      if (rcData[THROTTLE] > ALT_HOLD_THROTTLE_MIDPOINT + ALT_HOLD_THROTTLE_NEUTRAL_ZONE)
+      {
+        lLockBaroTakeoff = 0;
+        errorAltitudeI = 0; 
+        AltHold = alt.EstAlt;
+        initialThrottleHold = ALT_HOLD_THROTTLE_MIDPOINT;
+        BaroPID = 0;
+      }
+    }
+    #endif
+
     // perform actions    
     if (rcData[THROTTLE] <= MINCHECK) {            // THROTTLE at minimum
       #if !defined(FIXEDWING)
@@ -833,7 +919,8 @@ void loop () {
     if(rcDelayCommand == 20) {
       if(f.ARMED) {                   // actions during armed
         #ifdef ALLOW_ARM_DISARM_VIA_TX_YAW
-          if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_LO + PIT_CE + ROL_CE) go_disarm();    // Disarm via YAW
+          // if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_LO + PIT_CE + ROL_CE) go_disarm();    // Disarm via YAW
+          if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_LO + PIT_LO + ROL_HI) go_disarm();    // Disarm via YAW
         #endif
         #ifdef ALLOW_ARM_DISARM_VIA_TX_ROLL
           if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_CE + PIT_CE + ROL_LO) go_disarm();    // Disarm via ROLL
@@ -881,7 +968,8 @@ void loop () {
           previousTime = micros();
         }
         #ifdef ALLOW_ARM_DISARM_VIA_TX_YAW
-          else if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_HI + PIT_CE + ROL_CE) go_arm();      // Arm via YAW
+          // else if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_HI + PIT_CE + ROL_CE) go_arm();      // Arm via YAW
+          else if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_HI + PIT_LO + ROL_LO) go_arm();      // Arm via YAW
         #endif
         #ifdef ALLOW_ARM_DISARM_VIA_TX_ROLL
           else if (conf.activate[BOXARM] == 0 && rcSticks == THR_LO + YAW_CE + PIT_CE + ROL_HI) go_arm();      // Arm via ROLL
@@ -906,17 +994,21 @@ void loop () {
             LCDclear();
           }
         #endif
-        #if ACC
-          else if (rcSticks == THR_HI + YAW_LO + PIT_LO + ROL_CE) calibratingA=512;     // throttle=max, yaw=left, pitch=min
-        #endif
-        #if MAG
-          else if (rcSticks == THR_HI + YAW_HI + PIT_LO + ROL_CE) f.CALIBRATE_MAG = 1;  // throttle=max, yaw=right, pitch=min
-        #endif
-        i=0;
-        if      (rcSticks == THR_HI + YAW_CE + PIT_HI + ROL_CE) {conf.angleTrim[PITCH]+=2; i=1;}
-        else if (rcSticks == THR_HI + YAW_CE + PIT_LO + ROL_CE) {conf.angleTrim[PITCH]-=2; i=1;}
-        else if (rcSticks == THR_HI + YAW_CE + PIT_CE + ROL_HI) {conf.angleTrim[ROLL] +=2; i=1;}
-        else if (rcSticks == THR_HI + YAW_CE + PIT_CE + ROL_LO) {conf.angleTrim[ROLL] -=2; i=1;}
+        
+        // 需要禁用几个摇杆组合功能，防止全油门拉杆时，误打死方向舵进入水平或地磁校准。
+        // 因为飞固定翼时，经常会全油门飞，一旦升降舵或者副翼打死，有风险改变 conf.angleTrim 值，此值参与PID运算。
+        // 而另一种更危险的方式是全油门飞时，经常会把方向舵打死让飞机水平转弯，这时如果同时猛拉杆到死，会进入水平校准。
+        //        #if ACC
+        //          else if (rcSticks == THR_HI + YAW_LO + PIT_LO + ROL_CE) calibratingA=512;     // throttle=max, yaw=left, pitch=min
+        //        #endif
+        //        #if MAG
+        //          else if (rcSticks == THR_HI + YAW_HI + PIT_LO + ROL_CE) f.CALIBRATE_MAG = 1;  // throttle=max, yaw=right, pitch=min
+        //        #endif
+        //        i=0;
+        //        if      (rcSticks == THR_HI + YAW_CE + PIT_HI + ROL_CE) {conf.angleTrim[PITCH]+=2; i=1;}
+        //        else if (rcSticks == THR_HI + YAW_CE + PIT_LO + ROL_CE) {conf.angleTrim[PITCH]-=2; i=1;}
+        //        else if (rcSticks == THR_HI + YAW_CE + PIT_CE + ROL_HI) {conf.angleTrim[ROLL] +=2; i=1;}
+        //        else if (rcSticks == THR_HI + YAW_CE + PIT_CE + ROL_LO) {conf.angleTrim[ROLL] -=2; i=1;}
         if (i) {
           writeParams(1);
           rcDelayCommand = 0;    // allow autorepetition
@@ -926,6 +1018,28 @@ void loop () {
         }
       }
     }
+    else
+    {
+      // 不需要每次都运行
+      // 着陆后自动加锁    Skypup 2015.05.05
+      #define BAROPIDMIN           -180     //BaroPID reach this if we landed.....
+    
+      if (f.BARO_MODE)
+      {
+        if ( (abs(alt.vario) < 20) && (BaroPID < BAROPIDMIN)) {
+        }
+        else
+        {
+          // 如果没有着陆，自动加锁时间延后3秒。
+          nav_timer_stop = millis() + 3000;
+        }
+      
+        if (rcData[THROTTLE]<MINCHECK && nav_timer_stop <= millis()) {
+          go_disarm();
+        }  
+      }
+    }
+    
     #if defined(LED_FLASHER)
       led_flasher_autoselect_sequence();
     #endif
@@ -1168,7 +1282,24 @@ void loop () {
       static int16_t AltHoldCorr = 0;
       if (abs(rcCommand[THROTTLE]-initialThrottleHold)>ALT_HOLD_THROTTLE_NEUTRAL_ZONE) {
         // Slowly increase/decrease AltHold proportional to stick movement ( +100 throttle gives ~ +50 cm in 1 second with cycle time about 3-4ms)
-        AltHoldCorr+= rcCommand[THROTTLE] - initialThrottleHold;
+        // AltHoldCorr+= rcCommand[THROTTLE] - initialThrottleHold;
+        int16_t  nTemp;
+        
+        nTemp = rcCommand[THROTTLE] - initialThrottleHold;
+        
+        if (nTemp < 0) 
+        {
+          // nTemp >>= 1;
+          if (nTemp < -150) nTemp = -150;
+        }
+        if (nTemp > 0)
+         {
+           // nTemp >>= 1;
+           if (nTemp > 300) nTemp = 300;
+         }
+        
+         AltHoldCorr+= nTemp;    
+       
         if(abs(AltHoldCorr) > 512) {
           AltHold += AltHoldCorr/512;
           AltHoldCorr %= 512;
@@ -1179,6 +1310,12 @@ void loop () {
         isAltHoldChanged = 0;
       }
       rcCommand[THROTTLE] = initialThrottleHold + BaroPID;
+      #ifdef ALT_HOLD_THROTTLE_MIDPOINT
+        if (lLockBaroTakeoff) // 定高模式起飞，当油门未超过一半时，油门输出最小值。Skypup 2015.05.05
+        {
+          rcCommand[THROTTLE] = MINTHROTTLE;
+        }
+      #endif
     }
   #endif
 
@@ -1339,7 +1476,11 @@ void loop () {
   #error "*** you must set PID_CONTROLLER to one existing implementation"
 #endif
   mixTable();
-  // do not update servos during unarmed calibration of sensors which are sensitive to vibration
-  if ( (f.ARMED) || ((!calibratingG) && (!calibratingA)) ) writeServos();
-  writeMotors();
+  
+  // 校准传感器时不响应。Skypup.2015.05.05
+  if ( (!calibratingG) && (!calibratingA) ) 
+  {
+    writeServos();
+    writeMotors();
+  }
 }
